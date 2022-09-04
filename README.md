@@ -1,4 +1,4 @@
-# Assignment 3
+# Assignment - ALU + Load/Store 
 
 Implement ALU and Load/Store instructions from RISC-V RV32I set
 
@@ -33,18 +33,7 @@ $ riscv32-unknown-elf-objdump -d -Mnumeric,no-aliases dump.o
 
 ### Grading
 
-Assignment 3 (ALU + Load/Store) and 4 (Branch) use the same test bench, and only differ in the test cases.  Therefore if you submit the same code for both that is perfectly fine.  However, if you have trouble implementing branching, you are advised to ensure that the ALU and Load/Store are correctly implemented so you get full credit for A3.
+Assignment `alu_loadstore` (ALU + Load/Store) and `singlecycle` (Full single cycle CPU) use the same test bench, and only differ in the test cases.  You are strongle advised though to implement the ALU first to make debugging easier.
 
-## HowTo
+You first need to demo your code to the TAs in simulation, and then add the appropriate wrapper code to demonstrate it working on the FPGA hardware.  
 
-Fork this repostiry (`EE2003-2021/a3`) into your namespace so that you can edit and push changes.
-
-The `run.sh` script performs all the steps required to compile and test your code.  The `iverilog` compiler is used for running the verilog simulations.
-
-**IMPORTANT**: do not rename files or create new files - otherwise the auto-grader will not recognize it.  Even if you change the `.drone.yml` file, the system will repeat the tests with different configuration files, and your changes will most likely not be recognized then.
-
-Once you have confirmed that your code passes all the tests, commit all the changes, tag it for submission, and push to your repository.
-
-## Date
-
-Due Midnight, Sep 25, 2021
