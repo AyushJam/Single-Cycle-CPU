@@ -34,193 +34,207 @@ module cpu (
     
     // Create a register file
     // 32 registers, each 32-bit wide
-   	reg [31:0] registers [31:0];
-	reg [31:0] pc;
+    // to infer a D-FF, used the _d and _q regs
+    // registers[which register][which bit of register]
+   	reg [31:0] registers_d [31:0];
+   	reg [31:0] registers_q [31:0];
+	reg [31:0] pc_d;
+	reg [31:0] pc_q;
 	
 	 
     always @(posedge clk) begin
         if (reset) begin
-            iaddr <= 0;
-            daddr <= 0;
-            dwdata <= 0;
-            dwe <= 0;
-            registers <= 0;
-            pc <= 0;
+            iaddr 	<= 0;
+            daddr 	<= 0;
+            dwdata 	<= 0;
+            dwe		<= 0;
+            registers_d <= `{default: 0};
+            registers_q <= `{default: 0};
+            // pc 		<= 0;
             // check the previous line
-            
-        end else begin 
-        // Start Computation
-        
-        	case idata[6:0]:
-		    	7'b0110111: begin
-		    		// LUI
-		    		registers[idata[11:7]] <= (idata[31:12] << 12);
-		    	end
-		    	
-		    	7'b0010111: begin
-		    		// AUIPC - add upper immediate to pc
-		    		registers[idata[11:7]] <= pc + (idata[31:12] << 12);
-		    	end
-		    		
-		    	7'b0010011: begin
+        end 
+        else begin
+        	registers_q		<= registers_d;
+        	iaddr 			<= iaddr + 4;
+        	// dmem logic? write is handled in the dmem block
+        end
+    end
+    
+    
+    always@(*) begin
+    	// All instructions except dmem Load are combinational in a single cycle CPU.
+    	// default for all registers
+    	registers_d = registers_q;
+    	
+    	// Start with decoding the instruction
+    	case (idata[6:0])
+    		7'b0110111: begin
+	    		// LUI
+	    		registers_d[idata[11:7]] = (idata[31:12] << 12);
+	    	end
+	    	
+	    	7'b0010111: begin
+	    		// AUIPC - add upper immediate to pc
+	    		registers_d[idata[11:7]] = iaddr + (idata[31:12] << 12);
+	    	end
+	    	
+	    	7'b0010011: begin
 		    		// Immediate instructions
-		    		case idata[14:12]:
+		    		case (idata[14:12])
 		    			3'b000: begin
 		    				// ADDI - add immediate
-		    				registers[idata[11:7]] <= registers[idata[19:15]] + {20{idata[31]}, idata[31:20]};
+		    				registers_d[idata[11:7]] = registers_q[idata[19:15]] + {{20{idata[31]}}, idata[31:20]};
 		    			end
 		    				
 		    			3'b010: begin 
 		    				// SLTI - set less than immediate
-		    				registers[idata[11:7]] <= (registers[idata[19:15]] < {20{idata[31]}, idata[31:20]} ? 1 : 0;
+		    				registers_d[idata[11:7]] = (registers_q[idata[19:15]] < {{20{idata[31]}}, idata[31:20]}) ? 1 : 0;
 		    			end
 		    				
 		    			3'b011: begin 
 		    				// SLTIU - set less than immediate (unsigned) 
-		    				registers[idata[11:7]] <= (registers[idata[19:15]] < {20{0}, idata[31:20]} ? 1 : 0;
+		    				registers_d[idata[11:7]] = (registers_q[idata[19:15]] < {{20{0}}, idata[31:20]}) ? 1 : 0;
 		    			end
 		    				
 		    			3'b100: begin
 		    				// XORI - xor immediate      
-		    				registers[11:7] <= registers[idata[19:15]] ^ {20{idata[31]}, idata[31:20]};
+		    				registers_d[idata[11:7]] = (registers_q[idata[19:15]]) ^ {{20{0}}, idata[31:20]};
 		    			end
 		    				
 		    			3'b110: begin 
 		    				// ORI - or immediate
-		    				registers[11:7] <= registers[idata[19:15]] | {20{idata[31]}, idata[31:20]};
+		    				registers_d[11:7] = registers_q[idata[19:15]] | {{20{idata[31]}}, idata[31:20]};
 		    			end				
 		    				
 		    			3'b111: begin
 		    				// ANDI - and immediate
-		    				registers[11:7] <= registers[idata[19:15]] & {20{idata[31]}, idata[31:20]};
+		    				registers_d[11:7] = registers_q[idata[19:15]] & {{20{idata[31]}}, idata[31:20]};
 		    			end
 		    				
 		    			3'b001: begin
 		    				// SLLI - shift logical left
-		    				registers[11:7] <= registers[idata[19:15]] << idata[24:20];
+		    				registers_d[11:7] = registers_q[idata[19:15]] << idata[24:20];
 		    			end
 		    				
 		    			3'b101: begin
 		    				if (idata[31:27] == 00000) 
 			    				// SRLI - shift logical right
-			    				registers[11:7] <= registers[idata[19:15]] >> idata[24:20];
+			    				registers_d[11:7] = registers_q[idata[19:15]] >> idata[24:20];
 			    			else if (idata[31:27] == 01000)
 			    				// SRAI - shift right arithmetic
-		    					registers[11:7] <= registers[idata[19:15]] >>> idata[24:20];
+		    					registers_d[11:7] = registers_q[idata[19:15]] >>> idata[24:20];
 		    			end
 		    		endcase
-		    	end
-		    	     		
-		  		7'b0110011: begin
-		  			case idata[14:12]: 
+		    end
+		    
+		    7'b0110011: begin
+		  			case (idata[14:12]) 
 		  				3'b000: begin
 		  					if (idata[31:27] == 00000)
 		  						// ADD
-		  						registers[idata[11:7]] <= registers[idata[19:15]] + registers[idata[24:20]];
+		  						registers_d[idata[11:7]] = registers_q[idata[19:15]] + registers_q[idata[24:20]];
 		  					else if (idata[31:27] == 01000)
 		  						// SUB
-		  						registers[idata[11:7]] <= registers[idata[19:15]] - registers[idata[24:20]]; 
+		  						registers_d[idata[11:7]] = registers_q[idata[19:15]] - registers_q[idata[24:20]]; 
 		  				end
 		  				
 		  				3'b001: begin
-		  					// SLL
-		  					registers[idata[11:7]] <= registers[idata[19:15]] << registers[idata[24:20]];
+		  					// SLL - shift left logical
+		  					registers_d[idata[11:7]] = registers_q[idata[19:15]] << registers_q[idata[24:20]];
 		  				end
 		  				
 		  				3'b010: begin
-		  					// SLT
-		  					registers[idata[11:7]] <= registers[idata[19:15]] < registers[idata[24:20]] ? 1 : 0;
+		  					// SLT - signed compare / set on less than
+		  					registers_d[idata[11:7]] = registers_q[idata[19:15]] < registers_q[idata[24:20]] ? 1'd1 : 1'd0;
 		  				end
 		  				
 		  				3'b011: begin
-		  					// SLTU
+		  					// SLTU - unsigned compare / set on less than unsigned
 		  					// CHECK THIS!!
-		  					registers[idata[11:7]] <= registers[idata[19:15]] < registers[idata[24:20]] ? 1 : 0;
+		  					registers_d[idata[11:7]] = registers_q[idata[19:15]] < registers_q[idata[24:20]] ? 1'd1 : 1'd0;
 		  				end
 		  				
 		  				3'b100: begin
 		  					// XOR
-		  					registers[idata[11:7]] <= registers[idata[19:15]] ^ registers[idata[24:20]];
+		  					registers_d[idata[11:7]] = registers_q[idata[19:15]] ^ registers_q[idata[24:20]];
 		  				end
 		  				
 		  				3'b101: begin
 			  				if(idata[31:27] == 00000)
 			  					// SRL
-			  					registers[idata[11:7]] <= registers[idata[19:15]] >> registers[idata[24:20]];
+			  					registers_d[idata[11:7]] = registers_q[idata[19:15]] >> registers_q[idata[24:20]];
 			  				else if (idata[31:27] == 01000)
-			  					registers[idata[11:7]] <= registers[idata[19:15]] >>> registers[idata[24:20]];
+			  					registers_d[idata[11:7]] = registers_q[idata[19:15]] >>> registers_q[idata[24:20]];
 		  				end
 		  				
 		  				3'b111: begin
 		  					// AND
-		  					registers[idata[11:7]] <= registers[idata[19:15]] & registers[idata[24:20]];
+		  					registers_q[idata[11:7]] = registers_q[idata[19:15]] & registers_q[idata[24:20]];
 		  				end
 		  			endcase
-				end       			
-		    	
-		    	7'b0000011: begin
-		    		case(idata[14:12]):
+			end
+			
+			7'b0000011: begin
+		    		case(idata[14:12])
 		    			3'b000: begin
 		    				// LB - load byte
-		    				daddr <= registers[idata[19:15]] + {20{idata[31]}, idata[31:20]};
-		    				registers[idata[11:7]] <= {24{drdata[7]}, drdata[7:0]};
-		    				// This is wrong, the implementation should have been sequential, not parallel.
+		    				daddr = registers_q[idata[19:15]] + {{20{idata[31]}}, idata[31:20]};
+		    				registers_d[idata[11:7]] = {{24{drdata[7]}}, drdata[7:0]};
+		    				// as soon as data address is given, it is assumed that the data will be obtained
 		    			end
 		    			
 		    			3'b001: begin
 		    				// LH - load half word
-		    				daddr <= registers[idata[19:15]] + {20{idata[31]}, idata[31:20]};
-		    				registers[idata[11:7]] <= {16{drdata[7]}, drdata[15:0]};
+		    				daddr = registers_q[idata[19:15]] + {{20{idata[31]}}, idata[31:20]};
+		    				registers_q[idata[11:7]] = {{16{drdata[7]}}, drdata[15:0]};
 		    			end
 		    			
 		    			3'b010: begin
 		    				// LW - load word
-		    				daddr <= registers[idata[19:15]] + {20{idata[31]}, idata[31:20]};
-		    				registers[idata[11:7]] <= drdata;
+		    				daddr = registers_q[idata[19:15]] + {{20{idata[31]}}, idata[31:20]};
+		    				registers_d[idata[11:7]] = drdata;
 		    			end		
 		    			
 		    			3'b100: begin
 		    				// LBU - load byte unsigned
-		    				daddr <= registers[idata[19:15]] + {20{idata[31]}, idata[31:20]};
-		    				registers[idata[11:7]] <= {24{0}, drdata[7:0]};
+		    				daddr = registers_q[idata[19:15]] + {{20{idata[31]}}, idata[31:20]};
+		    				registers_d[idata[11:7]] = {{24{0}}, drdata[7:0]};
 		    			end
 		    			
 		    			3'b101: begin
 		    				// LHU - load halfword unsigned
-		    				daddr <= registers[idata[19:15]] + {20{idata[31]}, idata[31:20]};
-		    				registers[idata[11:7]] <= {24{0}, drdata[15:0]};
+		    				daddr = registers_q[idata[19:15]] + {{20{idata[31]}}, idata[31:20]};
+		    				registers_d[idata[11:7]] = {{24{0}}, drdata[15:0]};
 		    			end
-		    	end	
-		    	
-		    	7'b0100011: begin
+		    		endcase
+		    end
+		    
+		    7'b0100011: begin
 		    		case(idata[14:12])
 		    			3'b000: begin
 		    				// SB - store byte in lower 8 bits of memory
-		    				dwe <= 4'b0001;
-		    				daddr <= registers[idata[19:15]] + {{27{idata[11]}}, idata[11:7]};
-		    				dwdata <= {{24{1'b0}}, registers[idata[24:20]][7:0]};
+		    				dwe 	= 4'b0001;
+		    				daddr 	= registers_q[idata[19:15]] + {{27{idata[11]}}, idata[11:7]};
+		    				dwdata 	= {{24{1'b0}}, registers_q[idata[24:20]][7:0]};
 		    			end
 		    			
 		    			3'b000: begin
 		    				// SH - store halfword in lower 16 bits of memory
-		    				dwe <= 4'b0011;
-		    				daddr <= registers[idata[19:15]] + {{27{idata[11]}}, idata[11:7]};
-		    				dwdata <= {{16{1'b0}}, registers[idata[24:20]][15:0]};
+		    				dwe 	= 4'b0011;
+		    				daddr 	= registers_q[idata[19:15]] + {{27{idata[11]}}, idata[11:7]};
+		    				dwdata 	= {{16{1'b0}}, registers_q[idata[24:20]][15:0]};
 		    			end
 		    			
 		    			3'b000: begin
 		    				// SW - store word
-		    				dwe <= 4'1111;
-		    				daddr <= registers[idata[19:15]] + {{27{idata[11]}}, idata[11:7]};
-		    				dwdata <= registers[idata[24:20]][31:0]};
+		    				dwe 	= 4'b1111;
+		    				daddr 	= registers_q[idata[19:15]] + {{27{idata[11]}}, idata[11:7]};
+		    				dwdata 	= registers_q[idata[24:20]];
 		    			end		    			
 		    		endcase
-		    	end
-		    		  
-        	endcase
-        	
-            iaddr <= iaddr + 4;
-        end
+		    end
+		endcase		
     end
-
-endmodule
+endmodule   
+    
+    
