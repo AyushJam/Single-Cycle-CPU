@@ -40,6 +40,7 @@ module cpu (
    	reg [31:0] registers_q [31:0];
 	reg [31:0] pc_d;
 	reg [31:0] pc_q;
+	integer i;
 	
 	 
     always @(posedge clk) begin
@@ -48,13 +49,20 @@ module cpu (
             daddr 	<= 0;
             dwdata 	<= 0;
             dwe		<= 0;
-            registers_d <= `{default: 0};
-            registers_q <= `{default: 0};
+            // clear all registers
+            for (i = 0; i < 6'd32; i = i + 1) begin
+            	registers_d[i][31:0]	<= 32'b0;
+            	registers_q[i][31:0]	<= 32'b0;
+            end
+            
             // pc 		<= 0;
             // check the previous line
         end 
         else begin
-        	registers_q		<= registers_d;
+        	for (i = 0; i < 6'd32; i = i + 1) begin
+            	registers_q[i][31:0]		<= registers_d[i][31:0];
+            end
+        	
         	iaddr 			<= iaddr + 4;
         	// dmem logic? write is handled in the dmem block
         end
@@ -64,7 +72,9 @@ module cpu (
     always@(*) begin
     	// All instructions except dmem Load are combinational in a single cycle CPU.
     	// default for all registers
-    	registers_d = registers_q;
+    	for (i = 0; i < 6'd32; i = i + 1) begin
+           	registers_d[i][31:0]		= registers_q[i][31:0];
+        end
     	
     	// Start with decoding the instruction
     	case (idata[6:0])
@@ -93,36 +103,36 @@ module cpu (
 		    				
 		    			3'b011: begin 
 		    				// SLTIU - set less than immediate (unsigned) 
-		    				registers_d[idata[11:7]] = (registers_q[idata[19:15]] < {{20{0}}, idata[31:20]}) ? 1 : 0;
+		    				registers_d[idata[11:7]] = (registers_q[idata[19:15]] < {{20{1'b0}}, idata[31:20]}) ? 1 : 0;
 		    			end
 		    				
 		    			3'b100: begin
 		    				// XORI - xor immediate      
-		    				registers_d[idata[11:7]] = (registers_q[idata[19:15]]) ^ {{20{0}}, idata[31:20]};
+		    				registers_d[idata[11:7]] = (registers_q[idata[19:15]]) ^ {{20{1'b0}}, idata[31:20]};
 		    			end
 		    				
 		    			3'b110: begin 
 		    				// ORI - or immediate
-		    				registers_d[11:7] = registers_q[idata[19:15]] | {{20{idata[31]}}, idata[31:20]};
+		    				registers_d[idata[11:7]] = registers_q[idata[19:15]] | {{20{idata[31]}}, idata[31:20]};
 		    			end				
 		    				
 		    			3'b111: begin
 		    				// ANDI - and immediate
-		    				registers_d[11:7] = registers_q[idata[19:15]] & {{20{idata[31]}}, idata[31:20]};
+		    				registers_d[idata[11:7]] = registers_q[idata[19:15]] & {{20{idata[31]}}, idata[31:20]};
 		    			end
 		    				
 		    			3'b001: begin
 		    				// SLLI - shift logical left
-		    				registers_d[11:7] = registers_q[idata[19:15]] << idata[24:20];
+		    				registers_d[idata[11:7]] = registers_q[idata[19:15]] << idata[24:20];
 		    			end
 		    				
 		    			3'b101: begin
 		    				if (idata[31:27] == 00000) 
 			    				// SRLI - shift logical right
-			    				registers_d[11:7] = registers_q[idata[19:15]] >> idata[24:20];
+			    				registers_d[idata[11:7]] = registers_q[idata[19:15]] >> idata[24:20];
 			    			else if (idata[31:27] == 01000)
 			    				// SRAI - shift right arithmetic
-		    					registers_d[11:7] = registers_q[idata[19:15]] >>> idata[24:20];
+		    					registers_d[idata[11:7]] = registers_q[idata[19:15]] >>> idata[24:20];
 		    			end
 		    		endcase
 		    end
@@ -198,13 +208,13 @@ module cpu (
 		    			3'b100: begin
 		    				// LBU - load byte unsigned
 		    				daddr = registers_q[idata[19:15]] + {{20{idata[31]}}, idata[31:20]};
-		    				registers_d[idata[11:7]] = {{24{0}}, drdata[7:0]};
+		    				registers_d[idata[11:7]] = {{24{1'b0}}, drdata[7:0]};
 		    			end
 		    			
 		    			3'b101: begin
 		    				// LHU - load halfword unsigned
 		    				daddr = registers_q[idata[19:15]] + {{20{idata[31]}}, idata[31:20]};
-		    				registers_d[idata[11:7]] = {{24{0}}, drdata[15:0]};
+		    				registers_d[idata[11:7]] = {{24{1'b0}}, drdata[15:0]};
 		    			end
 		    		endcase
 		    end
