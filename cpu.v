@@ -38,15 +38,14 @@ module cpu (
     // registers[which register][which bit of register]
    	reg [31:0] registers_d [31:0];
    	reg [31:0] registers_q [31:0];
-	reg [31:0] pc_d;
-	reg [31:0] pc_q;
 	integer i, k;
 	
-	wire [4:0] rs1, rs2, rd;
+	wire [4:0] rs1, rs2;
 	wire [11:0] imm;
 	
-	assign rs1 = rs1;
-	assign rs2 = rs2;
+	assign rs1 = idata[19:15];
+	assign rs2 = idata[24:20];
+	assign imm = idata[31:20];
 	
     always @(posedge clk) begin
         if (reset) begin
@@ -61,14 +60,11 @@ module cpu (
             end
             
         end 
-        else begin
-        	if (k == 0) k <= 0; // wait for the second clock cycle
-			else begin        	
-				for (i = 0; i < 32; i = i + 1) begin
-					registers_q[i][31:0]	<= registers_d[i][31:0];
-				end
-				iaddr 	<= iaddr + 4;
-        	end
+        else begin			        	
+			for (i = 0; i < 32; i = i + 1) begin
+				registers_q[i]	<= registers_d[i];
+			end
+			iaddr 	<= iaddr + 4;
         end
     end
     
@@ -77,7 +73,7 @@ module cpu (
     	// All instructions except dmem Load are combinational in a single cycle CPU.
     	// default for all registers
     	for (i = 0; i < 32; i = i + 1) begin
-           	registers_d[i][31:0]	= registers_q[i][31:0];
+           	registers_d[i]	= registers_q[i];
         end
     	
     	// Start with decoding the instruction
@@ -144,56 +140,45 @@ module cpu (
 		    end
 		    
 		    7'b0110011: begin
-		  			case (idata[14:12]) 
-		  				3'b000: begin
-		  					if (idata[31:27] == 00000)
-		  						// ADD
-		  						registers_d[idata[11:7]] = registers_q[rs1] + registers_q[rs2];
-		  					else if (idata[31:27] == 01000)
-		  						// SUB
-		  						registers_d[idata[11:7]] = registers_q[rs1] - registers_q[rs2]; 
-		  				end
-		  				
-		  				3'b001: begin
-		  					// SLL - shift left logical
-		  					registers_d[idata[11:7]] = registers_q[rs1] << registers_q[rs2][4:0];
-		  				end
-		  				
-		  				3'b010: begin
-		  					// SLT - signed compare / set on less than
-		  					registers_d[idata[11:7]] = ($signed(registers_q[rs1]) < ($signed(registers_q[rs2]))) ? 1'd1 : 1'd0;
-		  				end
-		  				
-		  				3'b011: begin
-		  					// SLTU - unsigned compare / set on less than unsigned
-		  					registers_d[idata[11:7]] = (registers_q[rs1] < registers_q[rs2]) ? 1'd1 : 1'd0;
-		  				end
-		  				
-		  				3'b100: begin
-		  					// XOR
-		  					registers_d[idata[11:7]] = registers_q[rs1] ^ registers_q[rs2];
-		  				end
-		  				
-		  				3'b101: begin
-			  				if(idata[31:27] == 00000)
-			  					// SRL
-			  					registers_d[idata[11:7]] = registers_q[rs1] >> registers_q[rs2][4:0];
-			  				else if (idata[31:27] == 01000)
-			  					// SRA
-			  					registers_d[idata[11:7]] = registers_q[rs1] >>> registers_q[rs2][4:0];
-		  				end
-		  				
-		  				
-		  				3'b110: begin
-		  					// OR
-		  					registers_q[idata[11:7]] = registers_q[rs1] | registers_q[rs2];
-		  				end
-		  				
-		  				3'b111: begin
-		  					// AND
-		  					registers_q[idata[11:7]] = registers_q[rs1] & registers_q[rs2];
-		  				end
-		  			endcase
+                case(idata[31:25])
+                    7'b000_0000: begin
+                        case(idata[14:12])
+                            3'b000: begin // ADD
+                                registers_d[idata[11:7]] = registers_q[rs1] + registers_q[rs2];
+                            end
+                            3'b001: begin  // SLL
+                                registers_d[idata[11:7]] = registers_q[rs1] << registers_q[rs2][4:0];
+                            end
+                            3'b010: begin  // SLT
+                                registers_d[idata[11:7]] = ($signed(registers_q[rs1]) < ($signed(registers_q[rs2]))) ? 1 : 0;
+                            end
+                            3'b011: begin  // SLTU
+                                registers_d[idata[11:7]] = (registers_q[rs1] < registers_q[rs2]) ? 1 : 0;
+                            end
+                            3'b100: begin  // XOR
+                                registers_d[idata[11:7]] = registers_q[rs1] ^ registers_q[rs2];			end
+                            3'b101: begin  // SRL
+                                registers_d[idata[11:7]] = registers_q[rs1] >> registers_q[rs2][4:0];
+                            end
+                            3'b110: begin  // OR
+                                registers_d[idata[11:7]] = registers_q[rs1] | registers_q[rs2];
+                            end
+                            3'b111: begin  // AND
+                                registers_d[idata[11:7]] = registers_q[rs1] & registers_q[rs2];
+                            end
+                        endcase
+                    end
+                    7'b010_0000: begin
+                        case(idata[14:12])
+                            3'b000: begin // SUB
+                                registers_d[idata[11:7]] = registers_q[rs1] - registers_q[rs2]; 
+                            end
+                            3'b101: begin // SRA
+                                registers_d[idata[11:7]] = registers_q[rs1] >>> registers_q[rs2][4:0];
+                            end
+                        endcase
+                    end
+                endcase
 			end
 			
 			7'b0000011: begin
@@ -208,7 +193,7 @@ module cpu (
 		    			3'b001: begin
 		    				// LH - load half word
 		    				daddr = registers_q[rs1] + {{20{idata[31]}}, imm};
-		    				registers_q[idata[11:7]] = {{16{drdata[7]}}, drdata[15:0]};
+		    				registers_d[idata[11:7]] = {{16{drdata[7]}}, drdata[15:0]};
 		    			end
 		    			
 		    			3'b010: begin
@@ -241,14 +226,14 @@ module cpu (
 		    				dwdata 	= {{24{1'b0}}, registers_q[rs2][7:0]};
 		    			end
 		    			// imm = imm rd = idata[11:7]
-		    			3'b000: begin
+		    			3'b001: begin
 		    				// SH - store halfword in lower 16 bits of memory
 		    				daddr 	= registers_q[rs1] + {{20{idata[31]}}, {idata[31:25], idata[11:7]}};
 		    				dwe 	= daddr[1] ? 4'b1100 : 4'b0011;
 		    				dwdata 	= {{16{1'b0}}, registers_q[rs2][15:0]};
 		    			end
 		    			
-		    			3'b000: begin
+		    			3'b010: begin
 		    				// SW - store word
 		    				dwe 	= 4'b1111;
 		    				daddr 	= registers_q[rs1] + {{20{idata[31]}}, {idata[31:25], idata[11:7]}};
@@ -261,3 +246,4 @@ module cpu (
 endmodule   
     
     
+
