@@ -40,9 +40,14 @@ module cpu (
    	reg [31:0] registers_q [31:0];
 	reg [31:0] pc_d;
 	reg [31:0] pc_q;
-	integer i;
+	integer i, k;
 	
-	 
+	wire [4:0] rs1, rs2, rd;
+	wire [11:0] imm;
+	
+	assign rs1 = rs1;
+	assign rs2 = rs2;
+	
     always @(posedge clk) begin
         if (reset) begin
             iaddr 	<= 0;
@@ -50,21 +55,20 @@ module cpu (
             dwdata 	<= 0;
             dwe		<= 0;
             // clear all registers
-            for (i = 0; i < 6'd32; i = i + 1) begin
-            	registers_d[i][31:0]	<= 32'b0;
+            for (i = 0; i < 32; i = i + 1) begin
+            	// registers_d[i][31:0]	<= 32'b0;
             	registers_q[i][31:0]	<= 32'b0;
             end
             
-            // pc 		<= 0;
-            // check the previous line
         end 
         else begin
-        	for (i = 0; i < 6'd32; i = i + 1) begin
-            	registers_q[i][31:0]		<= registers_d[i][31:0];
-            end
-        	
-        	iaddr 			<= iaddr + 4;
-        	// dmem logic? write is handled in the dmem block
+        	if (k == 0) k <= 0; // wait for the second clock cycle
+			else begin        	
+				for (i = 0; i < 32; i = i + 1) begin
+					registers_q[i][31:0]	<= registers_d[i][31:0];
+				end
+				iaddr 	<= iaddr + 4;
+        	end
         end
     end
     
@@ -72,20 +76,22 @@ module cpu (
     always@(*) begin
     	// All instructions except dmem Load are combinational in a single cycle CPU.
     	// default for all registers
-    	for (i = 0; i < 6'd32; i = i + 1) begin
-           	registers_d[i][31:0]		= registers_q[i][31:0];
+    	for (i = 0; i < 32; i = i + 1) begin
+           	registers_d[i][31:0]	= registers_q[i][31:0];
         end
     	
     	// Start with decoding the instruction
     	case (idata[6:0])
-    		7'b0110111: begin
+    		7'b0110111: begin 
+    			// U-Type
 	    		// LUI
-	    		registers_d[idata[11:7]] = (idata[31:12] << 12);
+	    		registers_d[idata[11:7]] = ({idata[31:12], 12'b0});
 	    	end
 	    	
 	    	7'b0010111: begin
 	    		// AUIPC - add upper immediate to pc
 	    		registers_d[idata[11:7]] = iaddr + (idata[31:12] << 12);
+	    		// CHECK
 	    	end
 	    	
 	    	7'b0010011: begin
@@ -93,46 +99,46 @@ module cpu (
 		    		case (idata[14:12])
 		    			3'b000: begin
 		    				// ADDI - add immediate
-		    				registers_d[idata[11:7]] = registers_q[idata[19:15]] + {{20{idata[31]}}, idata[31:20]};
+		    				registers_d[idata[11:7]] = registers_q[rs1] + {{20{idata[31]}}, imm};
 		    			end
 		    				
 		    			3'b010: begin 
 		    				// SLTI - set less than immediate
-		    				registers_d[idata[11:7]] = (registers_q[idata[19:15]] < {{20{idata[31]}}, idata[31:20]}) ? 1 : 0;
+		    				registers_d[idata[11:7]] = ($signed(registers_q[rs1]) < $signed({{20{idata[31]}}, imm})) ? 1 : 0;
 		    			end
 		    				
 		    			3'b011: begin 
 		    				// SLTIU - set less than immediate (unsigned) 
-		    				registers_d[idata[11:7]] = (registers_q[idata[19:15]] < {{20{1'b0}}, idata[31:20]}) ? 1 : 0;
+		    				registers_d[idata[11:7]] = (registers_q[rs1] < {{20{1'b0}}, imm}) ? 1 : 0;
 		    			end
 		    				
 		    			3'b100: begin
 		    				// XORI - xor immediate      
-		    				registers_d[idata[11:7]] = (registers_q[idata[19:15]]) ^ {{20{1'b0}}, idata[31:20]};
+		    				registers_d[idata[11:7]] = (registers_q[rs1]) ^ {{20{1'b0}}, imm};
 		    			end
 		    				
 		    			3'b110: begin 
 		    				// ORI - or immediate
-		    				registers_d[idata[11:7]] = registers_q[idata[19:15]] | {{20{idata[31]}}, idata[31:20]};
+		    				registers_d[idata[11:7]] = registers_q[rs1] | {{20{idata[31]}}, imm};
 		    			end				
 		    				
 		    			3'b111: begin
 		    				// ANDI - and immediate
-		    				registers_d[idata[11:7]] = registers_q[idata[19:15]] & {{20{idata[31]}}, idata[31:20]};
+		    				registers_d[idata[11:7]] = registers_q[rs1] & {{20{idata[31]}}, imm};
 		    			end
 		    				
 		    			3'b001: begin
 		    				// SLLI - shift logical left
-		    				registers_d[idata[11:7]] = registers_q[idata[19:15]] << idata[24:20];
+		    				registers_d[idata[11:7]] = registers_q[rs1] << rs2;
 		    			end
 		    				
 		    			3'b101: begin
 		    				if (idata[31:27] == 00000) 
 			    				// SRLI - shift logical right
-			    				registers_d[idata[11:7]] = registers_q[idata[19:15]] >> idata[24:20];
+			    				registers_d[idata[11:7]] = registers_q[rs1] >> rs2;
 			    			else if (idata[31:27] == 01000)
 			    				// SRAI - shift right arithmetic
-		    					registers_d[idata[11:7]] = registers_q[idata[19:15]] >>> idata[24:20];
+		    					registers_d[idata[11:7]] = registers_q[rs1] >>> rs2;
 		    			end
 		    		endcase
 		    end
@@ -142,44 +148,50 @@ module cpu (
 		  				3'b000: begin
 		  					if (idata[31:27] == 00000)
 		  						// ADD
-		  						registers_d[idata[11:7]] = registers_q[idata[19:15]] + registers_q[idata[24:20]];
+		  						registers_d[idata[11:7]] = registers_q[rs1] + registers_q[rs2];
 		  					else if (idata[31:27] == 01000)
 		  						// SUB
-		  						registers_d[idata[11:7]] = registers_q[idata[19:15]] - registers_q[idata[24:20]]; 
+		  						registers_d[idata[11:7]] = registers_q[rs1] - registers_q[rs2]; 
 		  				end
 		  				
 		  				3'b001: begin
 		  					// SLL - shift left logical
-		  					registers_d[idata[11:7]] = registers_q[idata[19:15]] << registers_q[idata[24:20]];
+		  					registers_d[idata[11:7]] = registers_q[rs1] << registers_q[rs2][4:0];
 		  				end
 		  				
 		  				3'b010: begin
 		  					// SLT - signed compare / set on less than
-		  					registers_d[idata[11:7]] = registers_q[idata[19:15]] < registers_q[idata[24:20]] ? 1'd1 : 1'd0;
+		  					registers_d[idata[11:7]] = ($signed(registers_q[rs1]) < ($signed(registers_q[rs2]))) ? 1'd1 : 1'd0;
 		  				end
 		  				
 		  				3'b011: begin
 		  					// SLTU - unsigned compare / set on less than unsigned
-		  					// CHECK THIS!!
-		  					registers_d[idata[11:7]] = registers_q[idata[19:15]] < registers_q[idata[24:20]] ? 1'd1 : 1'd0;
+		  					registers_d[idata[11:7]] = (registers_q[rs1] < registers_q[rs2]) ? 1'd1 : 1'd0;
 		  				end
 		  				
 		  				3'b100: begin
 		  					// XOR
-		  					registers_d[idata[11:7]] = registers_q[idata[19:15]] ^ registers_q[idata[24:20]];
+		  					registers_d[idata[11:7]] = registers_q[rs1] ^ registers_q[rs2];
 		  				end
 		  				
 		  				3'b101: begin
 			  				if(idata[31:27] == 00000)
 			  					// SRL
-			  					registers_d[idata[11:7]] = registers_q[idata[19:15]] >> registers_q[idata[24:20]];
+			  					registers_d[idata[11:7]] = registers_q[rs1] >> registers_q[rs2][4:0];
 			  				else if (idata[31:27] == 01000)
-			  					registers_d[idata[11:7]] = registers_q[idata[19:15]] >>> registers_q[idata[24:20]];
+			  					// SRA
+			  					registers_d[idata[11:7]] = registers_q[rs1] >>> registers_q[rs2][4:0];
+		  				end
+		  				
+		  				
+		  				3'b110: begin
+		  					// OR
+		  					registers_q[idata[11:7]] = registers_q[rs1] | registers_q[rs2];
 		  				end
 		  				
 		  				3'b111: begin
 		  					// AND
-		  					registers_q[idata[11:7]] = registers_q[idata[19:15]] & registers_q[idata[24:20]];
+		  					registers_q[idata[11:7]] = registers_q[rs1] & registers_q[rs2];
 		  				end
 		  			endcase
 			end
@@ -188,32 +200,33 @@ module cpu (
 		    		case(idata[14:12])
 		    			3'b000: begin
 		    				// LB - load byte
-		    				daddr = registers_q[idata[19:15]] + {{20{idata[31]}}, idata[31:20]};
+		    				daddr = registers_q[rs1] + {{20{idata[31]}}, imm};
 		    				registers_d[idata[11:7]] = {{24{drdata[7]}}, drdata[7:0]};
 		    				// as soon as data address is given, it is assumed that the data will be obtained
 		    			end
 		    			
 		    			3'b001: begin
 		    				// LH - load half word
-		    				daddr = registers_q[idata[19:15]] + {{20{idata[31]}}, idata[31:20]};
+		    				daddr = registers_q[rs1] + {{20{idata[31]}}, imm};
 		    				registers_q[idata[11:7]] = {{16{drdata[7]}}, drdata[15:0]};
 		    			end
 		    			
 		    			3'b010: begin
 		    				// LW - load word
-		    				daddr = registers_q[idata[19:15]] + {{20{idata[31]}}, idata[31:20]};
+		    				daddr = registers_q[rs1] + {{20{idata[31]}}, imm};
 		    				registers_d[idata[11:7]] = drdata;
 		    			end		
 		    			
 		    			3'b100: begin
 		    				// LBU - load byte unsigned
-		    				daddr = registers_q[idata[19:15]] + {{20{idata[31]}}, idata[31:20]};
+		    				daddr = registers_q[rs1] + {{20{idata[31]}}, imm};
 		    				registers_d[idata[11:7]] = {{24{1'b0}}, drdata[7:0]};
+		    				// CHECK
 		    			end
 		    			
 		    			3'b101: begin
 		    				// LHU - load halfword unsigned
-		    				daddr = registers_q[idata[19:15]] + {{20{idata[31]}}, idata[31:20]};
+		    				daddr = registers_q[rs1] + {{20{idata[31]}}, imm};
 		    				registers_d[idata[11:7]] = {{24{1'b0}}, drdata[15:0]};
 		    			end
 		    		endcase
@@ -223,23 +236,23 @@ module cpu (
 		    		case(idata[14:12])
 		    			3'b000: begin
 		    				// SB - store byte in lower 8 bits of memory
-		    				dwe 	= 4'b0001;
-		    				daddr 	= registers_q[idata[19:15]] + {{27{idata[11]}}, idata[11:7]};
-		    				dwdata 	= {{24{1'b0}}, registers_q[idata[24:20]][7:0]};
+		    				daddr 	= registers_q[rs1] + {{20{idata[31]}}, {idata[31:25], idata[11:7]}};
+		    				dwe 	= 1'b1 << daddr[1:0];
+		    				dwdata 	= {{24{1'b0}}, registers_q[rs2][7:0]};
 		    			end
-		    			
+		    			// imm = imm rd = idata[11:7]
 		    			3'b000: begin
 		    				// SH - store halfword in lower 16 bits of memory
-		    				dwe 	= 4'b0011;
-		    				daddr 	= registers_q[idata[19:15]] + {{27{idata[11]}}, idata[11:7]};
-		    				dwdata 	= {{16{1'b0}}, registers_q[idata[24:20]][15:0]};
+		    				daddr 	= registers_q[rs1] + {{20{idata[31]}}, {idata[31:25], idata[11:7]}};
+		    				dwe 	= daddr[1] ? 4'b1100 : 4'b0011;
+		    				dwdata 	= {{16{1'b0}}, registers_q[rs2][15:0]};
 		    			end
 		    			
 		    			3'b000: begin
 		    				// SW - store word
 		    				dwe 	= 4'b1111;
-		    				daddr 	= registers_q[idata[19:15]] + {{27{idata[11]}}, idata[11:7]};
-		    				dwdata 	= registers_q[idata[24:20]];
+		    				daddr 	= registers_q[rs1] + {{20{idata[31]}}, {idata[31:25], idata[11:7]}};
+		    				dwdata 	= registers_q[rs2];
 		    			end		    			
 		    		endcase
 		    end
