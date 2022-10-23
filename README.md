@@ -1,16 +1,16 @@
-# Assignment - ALU + Load/Store 
+# Assignment - Single Cycle CPU
 
-Implement ALU and Load/Store instructions from RISC-V RV32I set
+Implement all instructions for RISC-V including Branch instructions
 
 ## Goals
 
-- Implement all the instructions in the RISC-V RV32I ISA that correspond to Load/Store (memory) operations, as well as all the ALU operations.
+- Implement all instructions of the RV32I set to make a single cycle CPU.
 
 ## Given
 
-The eventual goal of the single cycle CPU is to implement all instructions (except `FENCE`, `ECALL` and `EBREAK`) in the RV32I instruction set (pg. 130 of riscv-spec.pdf uploaded on Moodle).  For this, we will assume a simplified memory model, where data and instruction memory can be read in a single cycle (provide the address, and the memory responds with data in the same cycle), while allowing write at the next edge of the clock.  You are already provided with memory modules that behave as required, along with the following:
+The goal of the single cycle CPU is to implement all instructions (except `FENCE`, `ECALL` and `EBREAK`) in the RV32I instruction set (pg. 130 of riscv-spec.pdf uploaded on Moodle).  For this, we will assume a simplified memory model, where data and instruction memory can be read in a single cycle (provide the address, and the memory responds with data in the same cycle), while allowing write at the next edge of the clock.  You are already provided with memory modules that behave as required, along with the following:
 
-- Test bench with test cases having Load/Store along with ALU operations
+- Test bench with test cases including BRANCH instructions
     - Test bench will feed one input instruction per clock cycle
     - All registers are assumed initialized to 0 - this should be done in your code
 - IMEM and DMEM are given as modules in the test bench.  You should not change them, but have to follow the read/write timing patterns from them.
@@ -18,7 +18,7 @@ The eventual goal of the single cycle CPU is to implement all instructions (exce
 
 ## Details on the assignment
 
-You need to implement code for the `cpu` module, that will read in the instructions and execute them.  For this assignment, you can assume that the program counter (PC) always increments by 4 on each clock cycle.  For the assignment involving branching, this cannot be assumed and you will have to implement the proper changes in PC.
+You need to implement code for the `cpu` module, that will read in the instructions and execute them. For this assignment, all functionality should be correct, so that the PC cannot be assumed to increment automatically by 4, and should be implemented correctly as per BRANCH instructions.
 
 You can run all the test cases by typing in the following command at the command line:
 
@@ -41,7 +41,6 @@ $ riscv32-unknown-elf-objdump -d -Mnumeric,no-aliases dump.o
 
 ### Grading
 
-Assignment `alu_loadstore` (ALU + Load/Store) and `singlecycle` (Full single cycle CPU) use the same test bench, and only differ in the test cases.  You are strongle advised though to implement the ALU first to make debugging easier.
+This and the previous assignment (ALU + L/S) use the same test setup.  Therefore if you submit the same code for both that is perfectly fine.  However, if you have trouble implementing branching, you are advised to ensure that the Load/Store is correctly implemented first.
 
-You first need to demo your code to the TAs in simulation, and then add the appropriate wrapper code to demonstrate it working on the FPGA hardware.  
-
+Demonstrate the working simulation first to your TA, and then move on to the hardware demo on FPGA.  Both are required and you will need to explain the functioning of your code to the TA.
